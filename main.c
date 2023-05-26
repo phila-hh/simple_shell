@@ -1,53 +1,44 @@
-#include "shell.h"
+#include "main.h"
 
 /**
- * main - entry point of the program
- * @ac: number of arguments
- * @av: array of arguments
+ * main - program entry point
+ * @ac: argument count
+ * @av: argument vector
  *
- * Return: Always 0
+ * Return: 0 on success, 1 otherwise
  */
-
-int main(int ac, char *av[])
+int main(int ac, char **av)
 {
-	size_t buffer_size;
-	char *input_line;
-	int i, token_count, cmd_count, sh_interaction;
+	info_t info[] = { INFO_INIT };
+	int fd = 2;
 
-	buffer_size = 0;
-	input_line = NULL;
-	token_count = 0;
-	cmd_count = 1;
+	asm ("mov %1, %0\n\t"
+			"add $3, %0"
+			: "=r" (fd)
+			: "r" (fd));
 
-	signal(SIGINT, SIG_IGN);
-	sh_interaction = isatty(STDIN_FILENO);
-	if (sh_interaction == 0 && ac == 1)
+	if (ac == 2)
 	{
-		while (getline(&input_line, &buffer_size, stdin))
+		fd = open(av[1], O_RDONLY);
+		if (fd == -1)
 		{
-			token_count = num_count(input_line);
-			parse(input_line, token_count, av, cmd_count);
-			input_line = NULL;
+			if (errno == EACCES)
+				exit(126);
+			if (errno == ENOENT)
+			{
+				_eputs(av[0]);
+				_eputs(": 0: Can't open ");
+				_eputs(av[1]);
+				_eputchar('\n');
+				_eputchar(BUF_FLUSH);
+				exit(127);
+			}
+			return (EXIT_FAILURE);
 		}
-		free(input_line);
-		return (0);
+		info->readfd = fd;
 	}
-
-	while (sh_interaction)
-	{
-		write(1, "($) ", 4);
-		token_count = 0;
-		i = getline(&input_line, &buffer_size, stdin);
-		if (i < 0)
-		{
-			free(input_line);
-			write(1, "\n", 1);
-			break;
-		}
-		token_count = num_count(input_line);
-		parse(input_line, token_count, av, cmd_count);
-		cmd_count++;
-		input_line = NULL;
-	}
-	return (0);
+	populate_env_list(info);
+	read_history(info);
+	hsh(info, av);
+	return (EXIT_SUCCESS);
 }
